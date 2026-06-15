@@ -1,4 +1,4 @@
-name: Clone KolibriOS and Commit (Safe Vendor Mode)
+name: Clone KolibriOS and Commit (Reliable)
 
 on:
   workflow_dispatch:
@@ -11,45 +11,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo cleanly
+      - name: Checkout repo (force main branch)
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
-          submodules: false
 
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: HARD FIX - remove any submodule tracking of kolibrios
+      - name: Clean previous kolibrios (avoid submodule issues)
         run: |
-          # Remove submodule metadata if exists
+          git rm -r --cached kolibrios || true
+          rm -rf kolibrios
           rm -f .gitmodules || true
 
-          # Remove gitlink if it exists in index (IMPORTANT FIX)
-          git rm --cached kolibrios || true
-
-          # Clean any leftover config
-          git config -f .git/config --remove-section submodule.kolibrios || true
-
-      - name: Clone KolibriOS fresh
+      - name: Clone KolibriOS
         run: |
-          rm -rf kolibrios
           git clone --depth 1 https://github.com/KolibriOS/kolibrios.git kolibrios
 
-      - name: Force add as normal folder (NOT submodule)
+      - name: Stage files
         run: |
-          git add -f kolibrios
+          git add -A
 
-      - name: Verify staging
+      - name: Commit (always attempt)
+        run: |
+          git commit -m "Add KolibriOS snapshot" || echo "No changes to commit"
+
+      - name: Show status (debug)
         run: |
           git status
+          git log -1 || true
 
-      - name: Commit snapshot safely
+      - name: Push explicitly to origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git commit -m "Add KolibriOS source snapshot" || echo "Nothing to commit"
-
-      - name: Push changes safely
-        run: |
-          git push
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
