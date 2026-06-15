@@ -11,37 +11,49 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout current repo
+      - name: Checkout current repo (NO SUBMODULES)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: false
 
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Clone KolibriOS into root folder
+      - name: Safety cleanup (remove any broken submodule metadata)
+        run: |
+          rm -f .gitmodules || true
+          git config --global --unset-all submodule.kolibrios.url || true
+          git config --global --remove-section submodule.kolibrios || true || true
+
+      - name: Clone KolibriOS into repo root
         run: |
           rm -rf kolibrios
           git clone --depth 1 https://github.com/KolibriOS/kolibrios.git kolibrios
+          echo "Cloned KolibriOS:"
+          ls -lah kolibrios | head -50
 
-      - name: Check changes
-        id: changes
+      - name: Stage changes
         run: |
           git add kolibrios
+
+      - name: Check for changes
+        id: changes
+        run: |
           if git diff --cached --quiet; then
             echo "changes=false" >> $GITHUB_OUTPUT
           else
             echo "changes=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Commit changes
+      - name: Commit snapshot
         if: steps.changes.outputs.changes == 'true'
         run: |
           git commit -m "Add KolibriOS source snapshot"
 
-      - name: Push changes
+      - name: Push to repo
         if: steps.changes.outputs.changes == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
